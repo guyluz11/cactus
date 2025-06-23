@@ -2,36 +2,32 @@ library cactus;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:universal_io/io.dart';
 
-export 'chat.dart';
-export 'init_params.dart';
-export 'completion.dart';
 export './context.dart';
 export './model_downloader.dart';
 export './structs.dart';
+export 'chat.dart';
+export 'completion.dart';
+export 'grammar.dart';
+export 'init_params.dart';
+export 'tools.dart';
 
-export 'grammar.dart';   
-export 'tools.dart'; 
+typedef ImageDownloadProgressCallback = void Function(
+    double? progress, String statusMessage);
 
-
-
-typedef ImageDownloadProgressCallback = void Function(double? progress, String statusMessage);
-
-Future<String> downloadImage(
-  String url,
-  {String? filePath,
-  ImageDownloadProgressCallback? onProgress}
-) async {
+Future<String> downloadImage(String url,
+    {String? filePath, ImageDownloadProgressCallback? onProgress}) async {
   onProgress?.call(null, 'Starting image download from: $url');
-  
+
   String effectiveFilePath;
   if (filePath != null && filePath.isNotEmpty) {
     effectiveFilePath = filePath;
-    final dir = Directory(effectiveFilePath.substring(0, effectiveFilePath.lastIndexOf('/')));
+    final dir = Directory(
+        effectiveFilePath.substring(0, effectiveFilePath.lastIndexOf('/')));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -66,25 +62,24 @@ Future<String> downloadImage(
         if (totalBytes != -1 && totalBytes != 0) {
           final progress = receivedBytes / totalBytes;
           onProgress?.call(
-            progress,
-            'Downloading image: ${(progress * 100).toStringAsFixed(1)}% ' 
-            '(${(receivedBytes / 1024).toStringAsFixed(1)}KB / ${(totalBytes / 1024).toStringAsFixed(1)}KB)'
-          );
+              progress,
+              'Downloading image: ${(progress * 100).toStringAsFixed(1)}% '
+              '(${(receivedBytes / 1024).toStringAsFixed(1)}KB / ${(totalBytes / 1024).toStringAsFixed(1)}KB)');
         } else {
-          onProgress?.call(
-            null, 
-            'Downloading image: ${(receivedBytes / 1024).toStringAsFixed(1)}KB received'
-          );
+          onProgress?.call(null,
+              'Downloading image: ${(receivedBytes / 1024).toStringAsFixed(1)}KB received');
         }
       }
       await fileSink.flush();
       await fileSink.close();
-      
-      onProgress?.call(1.0, 'Image download complete. Saved to $effectiveFilePath');
+
+      onProgress?.call(
+          1.0, 'Image download complete. Saved to $effectiveFilePath');
       return effectiveFilePath;
     } else {
       String responseBody = await response.transform(utf8.decoder).join();
-      if (responseBody.length > 200) responseBody = "${responseBody.substring(0,200)}...";
+      if (responseBody.length > 200)
+        responseBody = "${responseBody.substring(0, 200)}...";
       throw Exception(
           'Failed to download image. Status: ${response.statusCode}. Response: $responseBody');
     }
@@ -94,8 +89,7 @@ Future<String> downloadImage(
       await imageFile.delete().catchError((_) => imageFile);
     }
     rethrow;
-  } finally {
-  }
+  } finally {}
 }
 
 class Uuid {

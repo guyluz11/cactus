@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
-import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:universal_io/io.dart';
 
+import './chat.dart';
+import './completion.dart';
 import './ffi_bindings.dart' as bindings;
 import './init_params.dart';
-import './completion.dart';
 import './model_downloader.dart';
-import './chat.dart';
 import './structs.dart';
 import './tools.dart';
 
@@ -40,12 +40,14 @@ class CactusCompletionException extends CactusException {
 }
 
 class CactusOperationException extends CactusException {
-  CactusOperationException(String operation, String message, [dynamic underlyingError])
+  CactusOperationException(String operation, String message,
+      [dynamic underlyingError])
       : super('$operation failed: $message', underlyingError);
 }
 
 class CactusTTSException extends CactusException {
-  CactusTTSException(String operation, String message, [dynamic underlyingError])
+  CactusTTSException(String operation, String message,
+      [dynamic underlyingError])
       : super('TTS $operation failed: $message', underlyingError);
 }
 
@@ -78,13 +80,15 @@ class CactusContext {
     try {
       if (params.modelUrl != null && params.modelUrl!.isNotEmpty) {
         final Directory appDocDir = await getApplicationDocumentsDirectory();
-        String modelFilename = params.modelFilename ?? params.modelUrl!.split('/').last;
+        String modelFilename =
+            params.modelFilename ?? params.modelUrl!.split('/').last;
         if (modelFilename.isEmpty) modelFilename = "downloaded_model.gguf";
         effectiveModelPath = '${appDocDir.path}/$modelFilename';
         final modelFile = File(effectiveModelPath);
 
         if (!await modelFile.exists()) {
-          params.onInitProgress?.call(0.0, "Downloading model from ${params.modelUrl}...", false);
+          params.onInitProgress?.call(
+              0.0, "Downloading model from ${params.modelUrl}...", false);
           await downloadModel(
             params.modelUrl!,
             effectiveModelPath,
@@ -94,21 +98,25 @@ class CactusContext {
           );
           params.onInitProgress?.call(1.0, "Model download complete.", false);
         } else {
-          params.onInitProgress?.call(null, "Model found locally at $effectiveModelPath", false);
+          params.onInitProgress
+              ?.call(null, "Model found locally at $effectiveModelPath", false);
         }
       } else if (effectiveModelPath == null || effectiveModelPath.isEmpty) {
-        throw ArgumentError('No modelPath or modelUrl provided in CactusInitParams.');
+        throw ArgumentError(
+            'No modelPath or modelUrl provided in CactusInitParams.');
       }
 
       if (params.mmprojUrl != null && params.mmprojUrl!.isNotEmpty) {
         final Directory appDocDir = await getApplicationDocumentsDirectory();
-        String mmprojFilename = params.mmprojFilename ?? params.mmprojUrl!.split('/').last;
+        String mmprojFilename =
+            params.mmprojFilename ?? params.mmprojUrl!.split('/').last;
         if (mmprojFilename.isEmpty) mmprojFilename = "downloaded_mmproj.gguf";
         effectiveMmprojPath = '${appDocDir.path}/$mmprojFilename';
         final mmprojFile = File(effectiveMmprojPath);
 
         if (!await mmprojFile.exists()) {
-          params.onInitProgress?.call(0.0, "Downloading mmproj from ${params.mmprojUrl}...", false);
+          params.onInitProgress?.call(
+              0.0, "Downloading mmproj from ${params.mmprojUrl}...", false);
           await downloadModel(
             params.mmprojUrl!,
             effectiveMmprojPath,
@@ -118,15 +126,18 @@ class CactusContext {
           );
           params.onInitProgress?.call(1.0, "MMProj download complete.", false);
         } else {
-          params.onInitProgress?.call(null, "MMProj found locally at $effectiveMmprojPath", false);
+          params.onInitProgress?.call(
+              null, "MMProj found locally at $effectiveMmprojPath", false);
         }
       }
 
-      params.onInitProgress?.call(null, "Initializing native context...", false);
+      params.onInitProgress
+          ?.call(null, "Initializing native context...", false);
 
       final cParams = calloc<bindings.CactusInitParamsC>();
       final modelPathC = effectiveModelPath.toNativeUtf8(allocator: calloc);
-      final chatTemplateForC = params.chatTemplate?.toNativeUtf8(allocator: calloc);
+      final chatTemplateForC =
+          params.chatTemplate?.toNativeUtf8(allocator: calloc);
       final cacheTypeKC = params.cacheTypeK?.toNativeUtf8(allocator: calloc);
       final cacheTypeVC = params.cacheTypeV?.toNativeUtf8(allocator: calloc);
 
@@ -148,21 +159,25 @@ class CactusContext {
         cParams.ref.cache_type_v = cacheTypeVC ?? nullptr;
         cParams.ref.progress_callback = nullptr;
 
-        final bindings.CactusContextHandle handle = bindings.initContext(cParams);
+        final bindings.CactusContextHandle handle =
+            bindings.initContext(cParams);
 
         if (handle == nullptr) {
-          const msg = 'Failed to initialize native cactus context. Handle was null. Check native logs for details.';
+          const msg =
+              'Failed to initialize native cactus context. Handle was null. Check native logs for details.';
           params.onInitProgress?.call(null, msg, true);
           throw CactusInitializationException(msg);
         }
-        
+
         final context = CactusContext._(handle);
 
-        if(effectiveMmprojPath != null && effectiveMmprojPath.isNotEmpty){
-          await context.initMultimodal(effectiveMmprojPath, useGpu: params.gpuLayers != 0);
+        if (effectiveMmprojPath != null && effectiveMmprojPath.isNotEmpty) {
+          await context.initMultimodal(effectiveMmprojPath,
+              useGpu: params.gpuLayers != 0);
         }
 
-        params.onInitProgress?.call(1.0, 'CactusContext initialized successfully.', false);
+        params.onInitProgress
+            ?.call(1.0, 'CactusContext initialized successfully.', false);
         return context;
       } catch (e) {
         final msg = 'Error during native context initialization: $e';
@@ -178,7 +193,8 @@ class CactusContext {
       }
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusInitializationException("Error during initialization: ${e.toString()}", e);
+      throw CactusInitializationException(
+          "Error during initialization: ${e.toString()}", e);
     }
   }
 
@@ -193,18 +209,19 @@ class CactusContext {
     try {
       textC = text.toNativeUtf8(allocator: calloc);
       final cTokenArray = bindings.tokenize(_handle, textC);
-      
+
       if (cTokenArray.tokens == nullptr || cTokenArray.count == 0) {
         bindings.freeTokenArray(cTokenArray);
         return [];
       }
-      final dartTokens = List<int>.generate(cTokenArray.count, (i) => cTokenArray.tokens[i]);
+      final dartTokens =
+          List<int>.generate(cTokenArray.count, (i) => cTokenArray.tokens[i]);
       bindings.freeTokenArray(cTokenArray);
       return dartTokens;
     } catch (e) {
-        throw CactusOperationException("Tokenization", "Native error during tokenization.", e);
-    }
-    finally {
+      throw CactusOperationException(
+          "Tokenization", "Native error during tokenization.", e);
+    } finally {
       if (textC != nullptr) calloc.free(textC);
     }
   }
@@ -229,9 +246,9 @@ class CactusContext {
       resultCPtr = nullptr;
       return resultString;
     } catch (e) {
-        throw CactusOperationException("Detokenization", "Native error during detokenization.", e);
-    }
-    finally {
+      throw CactusOperationException(
+          "Detokenization", "Native error during detokenization.", e);
+    } finally {
       if (tokensCPtr != nullptr) calloc.free(tokensCPtr);
     }
   }
@@ -248,18 +265,20 @@ class CactusContext {
         bindings.freeFloatArray(cFloatArray);
         return [];
       }
-      final dartEmbeddings = List<double>.generate(cFloatArray.count, (i) => cFloatArray.values[i]);
+      final dartEmbeddings = List<double>.generate(
+          cFloatArray.count, (i) => cFloatArray.values[i]);
       bindings.freeFloatArray(cFloatArray);
       return dartEmbeddings;
     } catch (e) {
-        throw CactusOperationException("Embedding generation", "Native error during embedding generation.", e);
-    }
-    finally {
+      throw CactusOperationException("Embedding generation",
+          "Native error during embedding generation.", e);
+    } finally {
       if (textC != nullptr) calloc.free(textC);
     }
   }
 
-  Future<CactusCompletionResult> completion(CactusCompletionParams params) async {
+  Future<CactusCompletionResult> completion(
+      CactusCompletionParams params) async {
     Pointer<bindings.CactusCompletionParamsC> cCompParams = nullptr;
     Pointer<bindings.CactusCompletionResultC> cResult = nullptr;
     Pointer<Utf8> promptC = nullptr;
@@ -267,8 +286,9 @@ class CactusContext {
     Pointer<Pointer<Utf8>> stopSequencesC = nullptr;
 
     try {
-      final String formattedPromptString = await _getFormattedChat(params.messages, params.chatTemplate);
-      
+      final String formattedPromptString =
+          await _getFormattedChat(params.messages, params.chatTemplate);
+
       cCompParams = calloc<bindings.CactusCompletionParamsC>();
       cResult = calloc<bindings.CactusCompletionResultC>();
       promptC = formattedPromptString.toNativeUtf8(allocator: calloc);
@@ -277,13 +297,15 @@ class CactusContext {
       if (params.stopSequences != null && params.stopSequences!.isNotEmpty) {
         stopSequencesC = calloc<Pointer<Utf8>>(params.stopSequences!.length);
         for (int i = 0; i < params.stopSequences!.length; i++) {
-          stopSequencesC[i] = params.stopSequences![i].toNativeUtf8(allocator: calloc);
+          stopSequencesC[i] =
+              params.stopSequences![i].toNativeUtf8(allocator: calloc);
         }
       }
 
       _currentOnNewTokenCallback = params.onNewToken as bool Function(String)?;
       final tokenCallbackC = _currentOnNewTokenCallback != null
-          ? Pointer.fromFunction<Bool Function(Pointer<Utf8>)>(_staticTokenCallbackDispatcher, false)
+          ? Pointer.fromFunction<Bool Function(Pointer<Utf8>)>(
+              _staticTokenCallbackDispatcher, false)
           : nullptr;
 
       cCompParams.ref.prompt = promptC;
@@ -308,11 +330,12 @@ class CactusContext {
       cCompParams.ref.stop_sequence_count = params.stopSequences?.length ?? 0;
       cCompParams.ref.grammar = grammarC;
       cCompParams.ref.token_callback = tokenCallbackC;
-      
+
       final status = bindings.completion(_handle, cCompParams, cResult);
 
       if (status != 0) {
-        throw CactusCompletionException('Native completion call failed with status: $status. Check native logs.');
+        throw CactusCompletionException(
+            'Native completion call failed with status: $status. Check native logs.');
       }
 
       return CactusCompletionResult(
@@ -327,10 +350,10 @@ class CactusContext {
       );
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusCompletionException("Error during completion setup or execution.", e);
-    }
-    finally {
-      _currentOnNewTokenCallback = null; 
+      throw CactusCompletionException(
+          "Error during completion setup or execution.", e);
+    } finally {
+      _currentOnNewTokenCallback = null;
       if (promptC != nullptr) calloc.free(promptC);
       if (grammarC != nullptr) calloc.free(grammarC);
       if (stopSequencesC != nullptr) {
@@ -340,7 +363,7 @@ class CactusContext {
         calloc.free(stopSequencesC);
       }
       if (cResult != nullptr) {
-        bindings.freeCompletionResultMembers(cResult); 
+        bindings.freeCompletionResultMembers(cResult);
         calloc.free(cResult);
       }
       if (cCompParams != nullptr) calloc.free(cCompParams);
@@ -348,9 +371,7 @@ class CactusContext {
   }
 
   Future<CactusCompletionResult> multimodalCompletion(
-    CactusCompletionParams params, 
-    List<String> mediaPaths
-  ) async {
+      CactusCompletionParams params, List<String> mediaPaths) async {
     Pointer<bindings.CactusCompletionParamsC> cCompParams = nullptr;
     Pointer<bindings.CactusCompletionResultC> cResult = nullptr;
     Pointer<Utf8> promptC = nullptr;
@@ -359,8 +380,9 @@ class CactusContext {
     Pointer<Pointer<Utf8>> mediaPathsC = nullptr;
 
     try {
-      final String formattedPromptString = await _getFormattedChat(params.messages, params.chatTemplate);
-      
+      final String formattedPromptString =
+          await _getFormattedChat(params.messages, params.chatTemplate);
+
       cCompParams = calloc<bindings.CactusCompletionParamsC>();
       cResult = calloc<bindings.CactusCompletionResultC>();
       promptC = formattedPromptString.toNativeUtf8(allocator: calloc);
@@ -376,13 +398,15 @@ class CactusContext {
       if (params.stopSequences != null && params.stopSequences!.isNotEmpty) {
         stopSequencesC = calloc<Pointer<Utf8>>(params.stopSequences!.length);
         for (int i = 0; i < params.stopSequences!.length; i++) {
-          stopSequencesC[i] = params.stopSequences![i].toNativeUtf8(allocator: calloc);
+          stopSequencesC[i] =
+              params.stopSequences![i].toNativeUtf8(allocator: calloc);
         }
       }
 
       _currentOnNewTokenCallback = params.onNewToken as bool Function(String)?;
       final tokenCallbackC = _currentOnNewTokenCallback != null
-          ? Pointer.fromFunction<Bool Function(Pointer<Utf8>)>(_staticTokenCallbackDispatcher, false)
+          ? Pointer.fromFunction<Bool Function(Pointer<Utf8>)>(
+              _staticTokenCallbackDispatcher, false)
           : nullptr;
 
       cCompParams.ref.prompt = promptC;
@@ -407,17 +431,13 @@ class CactusContext {
       cCompParams.ref.stop_sequence_count = params.stopSequences?.length ?? 0;
       cCompParams.ref.grammar = grammarC;
       cCompParams.ref.token_callback = tokenCallbackC;
-      
+
       final status = bindings.multimodalCompletion(
-        _handle, 
-        cCompParams, 
-        mediaPathsC, 
-        mediaPaths.length, 
-        cResult
-      );
+          _handle, cCompParams, mediaPathsC, mediaPaths.length, cResult);
 
       if (status != 0) {
-        throw CactusCompletionException('Native multimodal completion call failed with status: $status. Check native logs.');
+        throw CactusCompletionException(
+            'Native multimodal completion call failed with status: $status. Check native logs.');
       }
 
       return CactusCompletionResult(
@@ -432,29 +452,29 @@ class CactusContext {
       );
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusCompletionException("Error during multimodal completion setup or execution.", e);
-    }
-    finally {
-      _currentOnNewTokenCallback = null; 
+      throw CactusCompletionException(
+          "Error during multimodal completion setup or execution.", e);
+    } finally {
+      _currentOnNewTokenCallback = null;
       if (promptC != nullptr) calloc.free(promptC);
       if (grammarC != nullptr) calloc.free(grammarC);
-      
+
       if (mediaPathsC != nullptr) {
         for (int i = 0; i < mediaPaths.length; i++) {
           if (mediaPathsC[i] != nullptr) calloc.free(mediaPathsC[i]);
         }
         calloc.free(mediaPathsC);
       }
-      
+
       if (stopSequencesC != nullptr) {
         for (int i = 0; i < (params.stopSequences?.length ?? 0); i++) {
           if (stopSequencesC[i] != nullptr) calloc.free(stopSequencesC[i]);
         }
         calloc.free(stopSequencesC);
       }
-      
+
       if (cResult != nullptr) {
-        bindings.freeCompletionResultMembers(cResult); 
+        bindings.freeCompletionResultMembers(cResult);
         calloc.free(cResult);
       }
       if (cCompParams != nullptr) calloc.free(cCompParams);
@@ -465,31 +485,36 @@ class CactusContext {
     bindings.stopCompletion(_handle);
   }
 
-  Future<String> _getFormattedChat(List<ChatMessage> messages, String? overrideChatTemplate) async {
+  Future<String> _getFormattedChat(
+      List<ChatMessage> messages, String? overrideChatTemplate) async {
     Pointer<Utf8> messagesJsonC = nullptr;
     Pointer<Utf8> overrideChatTemplateC = nullptr;
     Pointer<Utf8> formattedPromptC = nullptr;
     try {
-      final messagesJsonString = jsonEncode(messages.map((m) => m.toJson()).toList());
+      final messagesJsonString =
+          jsonEncode(messages.map((m) => m.toJson()).toList());
       messagesJsonC = messagesJsonString.toNativeUtf8(allocator: calloc);
 
       if (overrideChatTemplate != null && overrideChatTemplate.isNotEmpty) {
-        overrideChatTemplateC = overrideChatTemplate.toNativeUtf8(allocator: calloc);
+        overrideChatTemplateC =
+            overrideChatTemplate.toNativeUtf8(allocator: calloc);
       }
 
       formattedPromptC = bindings.getFormattedChat(
-        _handle, 
-        messagesJsonC, 
+        _handle,
+        messagesJsonC,
         overrideChatTemplateC,
       );
 
       if (formattedPromptC == nullptr) {
-        throw CactusOperationException("ChatFormatting", "Native chat formatting returned null.");
+        throw CactusOperationException(
+            "ChatFormatting", "Native chat formatting returned null.");
       }
       return formattedPromptC.toDartString();
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusOperationException("ChatFormatting", "Error during _getFormattedChat: ${e.toString()}", e);
+      throw CactusOperationException("ChatFormatting",
+          "Error during _getFormattedChat: ${e.toString()}", e);
     } finally {
       if (messagesJsonC != nullptr) calloc.free(messagesJsonC);
       if (overrideChatTemplateC != nullptr) calloc.free(overrideChatTemplateC);
@@ -499,17 +524,19 @@ class CactusContext {
 
   Future<void> initMultimodal(String mmprojPath, {bool useGpu = true}) async {
     Pointer<Utf8> mmprojPathC = nullptr;
-    
+
     try {
       mmprojPathC = mmprojPath.toNativeUtf8(allocator: calloc);
       final status = bindings.initMultimodal(_handle, mmprojPathC, useGpu);
-      
+
       if (status != 0) {
-        throw CactusOperationException("InitMultimodal", "Failed to initialize multimodal with status: $status");
+        throw CactusOperationException("InitMultimodal",
+            "Failed to initialize multimodal with status: $status");
       }
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusOperationException("InitMultimodal", "Error during multimodal initialization: ${e.toString()}", e);
+      throw CactusOperationException("InitMultimodal",
+          "Error during multimodal initialization: ${e.toString()}", e);
     } finally {
       if (mmprojPathC != nullptr) calloc.free(mmprojPathC);
     }
@@ -533,17 +560,19 @@ class CactusContext {
 
   Future<void> initVocoder(String vocoderModelPath) async {
     Pointer<Utf8> vocoderPathC = nullptr;
-    
+
     try {
       vocoderPathC = vocoderModelPath.toNativeUtf8(allocator: calloc);
       final status = bindings.initVocoder(_handle, vocoderPathC);
-      
+
       if (status != 0) {
-        throw CactusTTSException("InitVocoder", "Failed to initialize vocoder with status: $status");
+        throw CactusTTSException(
+            "InitVocoder", "Failed to initialize vocoder with status: $status");
       }
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusTTSException("InitVocoder", "Error during vocoder initialization: ${e.toString()}", e);
+      throw CactusTTSException("InitVocoder",
+          "Error during vocoder initialization: ${e.toString()}", e);
     } finally {
       if (vocoderPathC != nullptr) calloc.free(vocoderPathC);
     }
@@ -557,25 +586,29 @@ class CactusContext {
     return bindings.getTTSType(_handle);
   }
 
-  String getFormattedAudioCompletion(String speakerJsonStr, String textToSpeak) {
+  String getFormattedAudioCompletion(
+      String speakerJsonStr, String textToSpeak) {
     Pointer<Utf8> speakerJsonC = nullptr;
     Pointer<Utf8> textC = nullptr;
     Pointer<Utf8> resultC = nullptr;
-    
+
     try {
       speakerJsonC = speakerJsonStr.toNativeUtf8(allocator: calloc);
       textC = textToSpeak.toNativeUtf8(allocator: calloc);
-      
-      resultC = bindings.getFormattedAudioCompletion(_handle, speakerJsonC, textC);
-      
+
+      resultC =
+          bindings.getFormattedAudioCompletion(_handle, speakerJsonC, textC);
+
       if (resultC == nullptr) {
-        throw CactusTTSException("GetFormattedAudioCompletion", "Native call returned null");
+        throw CactusTTSException(
+            "GetFormattedAudioCompletion", "Native call returned null");
       }
-      
+
       return resultC.toDartString();
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusTTSException("GetFormattedAudioCompletion", "Error: ${e.toString()}", e);
+      throw CactusTTSException(
+          "GetFormattedAudioCompletion", "Error: ${e.toString()}", e);
     } finally {
       if (speakerJsonC != nullptr) calloc.free(speakerJsonC);
       if (textC != nullptr) calloc.free(textC);
@@ -585,22 +618,25 @@ class CactusContext {
 
   List<int> getAudioGuideTokens(String textToSpeak) {
     Pointer<Utf8> textC = nullptr;
-    
+
     try {
       textC = textToSpeak.toNativeUtf8(allocator: calloc);
-      final cTokenArray = bindings.getAudioCompletionGuideTokens(_handle, textC);
-      
+      final cTokenArray =
+          bindings.getAudioCompletionGuideTokens(_handle, textC);
+
       if (cTokenArray.tokens == nullptr || cTokenArray.count == 0) {
         bindings.freeTokenArray(cTokenArray);
         return [];
       }
-      
-      final dartTokens = List<int>.generate(cTokenArray.count, (i) => cTokenArray.tokens[i]);
+
+      final dartTokens =
+          List<int>.generate(cTokenArray.count, (i) => cTokenArray.tokens[i]);
       bindings.freeTokenArray(cTokenArray);
       return dartTokens;
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusTTSException("GetAudioGuideTokens", "Error: ${e.toString()}", e);
+      throw CactusTTSException(
+          "GetAudioGuideTokens", "Error: ${e.toString()}", e);
     } finally {
       if (textC != nullptr) calloc.free(textC);
     }
@@ -608,28 +644,31 @@ class CactusContext {
 
   List<double> decodeAudioTokens(List<int> tokens) {
     if (tokens.isEmpty) return [];
-    
+
     Pointer<Int32> tokensCPtr = nullptr;
-    
+
     try {
       tokensCPtr = calloc<Int32>(tokens.length);
       for (int i = 0; i < tokens.length; i++) {
         tokensCPtr[i] = tokens[i];
       }
-      
-      final cFloatArray = bindings.decodeAudioTokens(_handle, tokensCPtr, tokens.length);
-      
+
+      final cFloatArray =
+          bindings.decodeAudioTokens(_handle, tokensCPtr, tokens.length);
+
       if (cFloatArray.values == nullptr || cFloatArray.count == 0) {
         bindings.freeFloatArray(cFloatArray);
         return [];
       }
-      
-      final dartAudio = List<double>.generate(cFloatArray.count, (i) => cFloatArray.values[i]);
+
+      final dartAudio = List<double>.generate(
+          cFloatArray.count, (i) => cFloatArray.values[i]);
       bindings.freeFloatArray(cFloatArray);
       return dartAudio;
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusTTSException("DecodeAudioTokens", "Error: ${e.toString()}", e);
+      throw CactusTTSException(
+          "DecodeAudioTokens", "Error: ${e.toString()}", e);
     } finally {
       if (tokensCPtr != nullptr) calloc.free(tokensCPtr);
     }
@@ -660,11 +699,13 @@ class CactusContext {
       final status = bindings.applyLoraAdapters(_handle, cAdaptersStruct);
 
       if (status != 0) {
-        throw CactusOperationException("ApplyLoraAdapters", "Failed to apply LoRA adapters with status: $status");
+        throw CactusOperationException("ApplyLoraAdapters",
+            "Failed to apply LoRA adapters with status: $status");
       }
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusOperationException("ApplyLoraAdapters", "Error: ${e.toString()}", e);
+      throw CactusOperationException(
+          "ApplyLoraAdapters", "Error: ${e.toString()}", e);
     } finally {
       calloc.free(cAdapters);
       for (var p in pathPointers) {
@@ -677,7 +718,7 @@ class CactusContext {
   BenchResult bench({int pp = 512, int tg = 128, int pl = 1, int nr = 1}) {
     try {
       final cResult = bindings.bench(_handle, pp, tg, pl, nr);
-      
+
       final result = BenchResult(
         modelDesc: cResult.model_name.toDartString(),
         modelSize: cResult.model_size,
@@ -691,7 +732,8 @@ class CactusContext {
       bindings.freeString(cResult.model_name);
       return result;
     } catch (e) {
-      throw CactusOperationException("Benchmarking", "Error during benchmarking: ${e.toString()}", e);
+      throw CactusOperationException(
+          "Benchmarking", "Error during benchmarking: ${e.toString()}", e);
     }
   }
 
@@ -701,7 +743,8 @@ class CactusContext {
 
   List<LoraAdapterInfo> getLoadedLoraAdapters() {
     final cAdapters = bindings.getLoadedLoraAdapters(_handle);
-    final cAdaptersStructPtr = calloc<bindings.CactusLoraAdaptersC>()..ref = cAdapters;
+    final cAdaptersStructPtr = calloc<bindings.CactusLoraAdaptersC>()
+      ..ref = cAdapters;
     try {
       final adapters = <LoraAdapterInfo>[];
       for (int i = 0; i < cAdapters.count; i++) {
@@ -727,9 +770,10 @@ class CactusContext {
     }
   }
 
-  Future<AdvancedChatResult> getFormattedChatAdvanced(CactusCompletionParams params) async {
+  Future<AdvancedChatResult> getFormattedChatAdvanced(
+      CactusCompletionParams params) async {
     final finalTemplate = params.chatTemplate ?? 'chatml';
-    
+
     Pointer<Utf8> messagesC = nullptr;
     Pointer<Utf8> finalTemplateC = nullptr;
     Pointer<Utf8> jsonSchemaC = nullptr;
@@ -737,13 +781,19 @@ class CactusContext {
     Pointer<Utf8> toolChoiceC = nullptr;
 
     try {
-      messagesC = jsonEncode(params.messages.map((m) => m.toJson()).toList()).toNativeUtf8(allocator: calloc);
+      messagesC = jsonEncode(params.messages.map((m) => m.toJson()).toList())
+          .toNativeUtf8(allocator: calloc);
       finalTemplateC = finalTemplate.toNativeUtf8(allocator: calloc);
-      jsonSchemaC = (params.responseFormat?.schema != null) 
-          ? jsonEncode(params.responseFormat!.schema).toNativeUtf8(allocator: calloc) 
+      jsonSchemaC = (params.responseFormat?.schema != null)
+          ? jsonEncode(params.responseFormat!.schema)
+              .toNativeUtf8(allocator: calloc)
           : nullptr;
-      toolsC = (params.tools != null) ? params.tools!.toNativeUtf8(allocator: calloc) : nullptr;
-      toolChoiceC = (params.toolChoice != null) ? params.toolChoice!.toNativeUtf8(allocator: calloc) : nullptr;
+      toolsC = (params.tools != null)
+          ? params.tools!.toNativeUtf8(allocator: calloc)
+          : nullptr;
+      toolChoiceC = (params.toolChoice != null)
+          ? params.toolChoice!.toNativeUtf8(allocator: calloc)
+          : nullptr;
 
       final resultC = bindings.getFormattedChatWithJinja(
         _handle,
@@ -778,7 +828,8 @@ class CactusContext {
     }
   }
 
-  Future<CactusCompletionResult> completionAdvanced(CactusCompletionParams params) async {
+  Future<CactusCompletionResult> completionAdvanced(
+      CactusCompletionParams params) async {
     final chatResult = await getFormattedChatAdvanced(params);
     final newParams = params.copyWith(
       messages: [ChatMessage(role: 'user', content: chatResult.prompt)],
@@ -794,7 +845,8 @@ class CactusContext {
     int recursionLimit = 3,
   }) async {
     if (tools != null) {
-      return _completionWithTools(params, tools: tools, recursionLimit: recursionLimit);
+      return _completionWithTools(params,
+          tools: tools, recursionLimit: recursionLimit);
     } else if (params.responseFormat != null || params.jinja == true) {
       return completionAdvanced(params);
     } else if (mediaPaths.isNotEmpty) {
@@ -813,12 +865,13 @@ class CactusContext {
       return completion(params);
     }
 
-    final currentMessages = ToolCalling.injectToolsIntoMessages(params.messages, tools);
+    final currentMessages =
+        ToolCalling.injectToolsIntoMessages(params.messages, tools);
     final newParams = params.copyWith(
       messages: currentMessages,
       tools: tools.getDefinitionsJson(),
     );
-    
+
     final result = await completionAdvanced(newParams);
     final toolCalls = ToolCalling.parseToolCalls(result.text);
 
@@ -826,13 +879,18 @@ class CactusContext {
       return result;
     }
 
-    final toolExecutionResults = await Future.wait(toolCalls.map((call) => tools.executeTool(call.name, call.arguments)));
-    
+    final toolExecutionResults = await Future.wait(
+        toolCalls.map((call) => tools.executeTool(call.name, call.arguments)));
+
     List<ChatMessage> updatedMessages = [...currentMessages];
     for (int i = 0; i < toolCalls.length; i++) {
       final toolCall = toolCalls[i];
       final executionResult = toolExecutionResults[i];
-      updatedMessages = ToolCalling.updateMessagesWithToolCall(updatedMessages, toolCall.name, toolCall.arguments, executionResult.toolOutput ?? executionResult.error);
+      updatedMessages = ToolCalling.updateMessagesWithToolCall(
+          updatedMessages,
+          toolCall.name,
+          toolCall.arguments,
+          executionResult.toolOutput ?? executionResult.error);
     }
 
     return _completionWithTools(
@@ -843,41 +901,48 @@ class CactusContext {
     );
   }
 
-  Future<String> generateResponse(String userMessage, {int maxTokens = 200}) async {
+  Future<String> generateResponse(String userMessage,
+      {int maxTokens = 200}) async {
     Pointer<Utf8> userMessageC = nullptr;
     Pointer<Utf8> resultC = nullptr;
-    
+
     try {
       userMessageC = userMessage.toNativeUtf8(allocator: calloc);
       resultC = bindings.generateResponse(_handle, userMessageC, maxTokens);
-      
+
       if (resultC == nullptr) {
-        throw CactusCompletionException("Native generateResponse call returned null");
+        throw CactusCompletionException(
+            "Native generateResponse call returned null");
       }
-      
+
       return resultC.toDartString();
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusCompletionException("Error during generateResponse: ${e.toString()}", e);
+      throw CactusCompletionException(
+          "Error during generateResponse: ${e.toString()}", e);
     } finally {
       if (userMessageC != nullptr) calloc.free(userMessageC);
       if (resultC != nullptr) bindings.freeString(resultC);
     }
   }
 
-  Future<ConversationResult> continueConversation(String userMessage, {int maxTokens = 200}) async {
+  Future<ConversationResult> continueConversation(String userMessage,
+      {int maxTokens = 200}) async {
     Pointer<Utf8> userMessageC = nullptr;
-    
+
     try {
       userMessageC = userMessage.toNativeUtf8(allocator: calloc);
-      final cResult = bindings.continueConversation(_handle, userMessageC, maxTokens);
-      final cResultPtr = calloc<bindings.CactusConversationResultC>()..ref = cResult;
-      
+      final cResult =
+          bindings.continueConversation(_handle, userMessageC, maxTokens);
+      final cResultPtr = calloc<bindings.CactusConversationResultC>()
+        ..ref = cResult;
+
       try {
         if (cResult.text == nullptr) {
-          throw CactusCompletionException("Native continueConversation call returned null text");
+          throw CactusCompletionException(
+              "Native continueConversation call returned null text");
         }
-        
+
         return ConversationResult(
           text: cResult.text.toDartString(),
           timeToFirstToken: cResult.time_to_first_token,
@@ -890,7 +955,8 @@ class CactusContext {
       }
     } catch (e) {
       if (e is CactusException) rethrow;
-      throw CactusCompletionException("Error during continueConversation: ${e.toString()}", e);
+      throw CactusCompletionException(
+          "Error during continueConversation: ${e.toString()}", e);
     } finally {
       if (userMessageC != nullptr) calloc.free(userMessageC);
     }
